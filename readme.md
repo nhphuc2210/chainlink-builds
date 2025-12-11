@@ -39,8 +39,6 @@ reward_preview/
 
 1. **Install dependencies:**
    ```bash
-   pnpm run install:all
-   # or simply
    pnpm install
    ```
 
