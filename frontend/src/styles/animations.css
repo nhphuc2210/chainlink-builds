@@ -1,0 +1,255 @@
+/* ========== PAGE LOAD ANIMATIONS ========== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.animate-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.animate-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.animate-delay-3 { animation-delay: 0.3s; opacity: 0; }
+.animate-delay-4 { animation-delay: 0.4s; opacity: 0; }
+.animate-delay-5 { animation-delay: 0.5s; opacity: 0; }
+
+/* ========== PULSE ANIMATION ========== */
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(55, 91, 210, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(55, 91, 210, 0);
+  }
+}
+
+.pulse-dot {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ========== SPINNER ANIMATION ========== */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* ========== TABLE ROW STAGGER ========== */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.table-row {
+  animation: slideInLeft 0.3s ease-out forwards;
+  opacity: 0;
+  transition: background 0.15s ease;
+}
+
+.table-row:hover {
+  background: rgba(55, 91, 210, 0.08) !important;
+}
+
+.table-row:hover td {
+  color: #1e293b !important;
+}
+
+/* ========== PROGRESS BAR ANIMATION ========== */
+@keyframes progressFill {
+  from { width: 0%; }
+}
+
+.progress-fill {
+  animation: progressFill 1s ease-out forwards;
+}
+
+/* ========== COPY BUTTON ========== */
+.copy-btn {
+  opacity: 0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #64748b;
+}
+
+.summary-box:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: rgba(55, 91, 210, 0.1);
+  color: #375BD2;
+}
+
+.copy-btn.copied {
+  color: #059669;
+}
+
+/* ========== SUMMARY BOX HOVER ========== */
+.summary-box {
+  transition: all 0.25s ease;
+  cursor: default;
+  position: relative;
+}
+
+.summary-box:hover {
+  transform: translateY(-4px);
+  border-color: #375BD2 !important;
+  box-shadow: 0 12px 32px rgba(55, 91, 210, 0.15);
+}
+
+/* ========== BADGE HOVER ========== */
+.badge {
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(55, 91, 210, 0.3);
+}
+
+/* ========== LOGO HOVER ========== */
+.logo {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.logo:hover {
+  transform: rotate(15deg) scale(1.1);
+  filter: drop-shadow(0 0 12px rgba(55, 91, 210, 0.5));
+}
+
+/* ========== TITLE HOVER ========== */
+.title {
+  transition: all 0.2s ease;
+}
+
+.title:hover {
+  color: #375BD2;
+}
+
+/* ========== FOOTER ========== */
+.footer {
+  transition: all 0.2s ease;
+}
+
+.footer:hover {
+  color: #375BD2;
+}
+
+/* ========== INPUT GROUP ========== */
+.input-label {
+  transition: color 0.2s ease;
+}
+
+.input-group:hover .input-label {
+  color: #375BD2;
+}
+
+/* ========== PROJECT SELECTOR ========== */
+.custom-select {
+  position: relative;
+}
+
+.project-select {
+  transition: all 0.25s ease !important;
+}
+
+.project-select:hover {
+  border-color: #a5b4fc !important;
+  box-shadow: 0 4px 16px rgba(42, 90, 218, 0.12) !important;
+}
+
+.project-select:focus {
+  border-color: #2a5ada !important;
+  box-shadow: 0 0 0 4px rgba(42, 90, 218, 0.15), 0 4px 16px rgba(42, 90, 218, 0.12) !important;
+}
+
+.custom-select:hover .select-chevron {
+  color: #2a5ada;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.project-select:focus + .select-chevron {
+  color: #2a5ada;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* ========== REFRESH BUTTON ========== */
+.refresh-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.refresh-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+.refresh-btn:hover {
+  transform: scale(1.08) !important;
+  box-shadow: 0 8px 24px rgba(42, 90, 218, 0.4) !important;
+}
+
+.refresh-btn:hover::before {
+  width: 150%;
+  height: 150%;
+}
+
+.refresh-btn:active {
+  transform: scale(0.95) !important;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+/* Glow effect for refresh button */
+@keyframes buttonGlow {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(42, 90, 218, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(42, 90, 218, 0.5), 0 0 30px rgba(42, 90, 218, 0.2);
+  }
+}
+
+.refresh-btn:not(:disabled):hover {
+  animation: buttonGlow 2s ease-in-out infinite;
+}
+

@@ -1,0 +1,36 @@
+{
+  "name": "reward-preview",
+  "version": "1.0.0",
+  "description": "BUILD Reward Calculator - Vesting Sandbox with on-chain logic",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+    "dev:frontend": "vite --config frontend/vite.config.js",
+    "dev:backend": "cross-env NODE_ENV=development node --watch backend/src/server.js",
+    "build": "vite build --config frontend/vite.config.js",
+    "start": "node backend/src/server.js",
+    "preview": "vite preview --config frontend/vite.config.js"
+  },
+  "dependencies": {
+    "@tsparticles/react": "^3.0.0",
+    "@tsparticles/slim": "^3.9.1",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.13.4",
+    "express": "^4.18.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "rimraf": "^5.0.5",
+    "vite": "^7.2.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

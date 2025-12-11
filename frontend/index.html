@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="BUILD Reward Calculator - Calculate your BUILD reward claim options" />
+    <title>BUILD Reward Calculator</title>
+    <link rel="icon" type="image/svg+xml" href="/hexagon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f8fafc;
+        min-height: 100vh;
+        color: #1e293b;
+      }
+      #root {
+        min-height: 100vh;
+      }
+
+      /* ========== CUSTOM SCROLLBAR ========== */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #375BD2;
+      }
+
+      /* ========== INPUT STATES ========== */
+      input {
+        transition: all 0.2s ease;
+      }
+      input:hover {
+        border-color: #375BD2 !important;
+        background: #f8fafc !important;
+      }
+      input:focus {
+        border-color: #375BD2 !important;
+        box-shadow: 0 0 0 3px rgba(55, 91, 210, 0.15) !important;
+        background: #ffffff !important;
+        outline: none;
+      }
+      input::placeholder {
+        color: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
