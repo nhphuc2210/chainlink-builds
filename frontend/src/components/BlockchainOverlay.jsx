@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, memo } from "react";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { theme } from '../styles/theme.js';
 
-export function BlockchainOverlay() {
+function BlockchainOverlayComponent() {
   const [init, setInit] = useState(false);
 
   useEffect(() => {
@@ -105,4 +105,8 @@ export function BlockchainOverlay() {
     />
   );
 }
+
+// Memoize component to prevent re-renders when parent App re-renders
+// This component has no props and should only render once
+export const BlockchainOverlay = memo(BlockchainOverlayComponent);
 

@@ -1,0 +1,6 @@
+import { API_ROUTES } from '../shared/api.js';
+
+export const API_CONSTANTS = {
+  BASE_API_PATH: API_ROUTES.BASE_PATH,
+  INTERNAL_API_PATH: API_ROUTES.INTERNAL_PATH,
+};

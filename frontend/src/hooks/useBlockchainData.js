@@ -1,75 +1,234 @@
-import { useState, useEffect, useCallback } from "react";
+import useSWR from 'swr';
+import { generateAuthHeaders } from "../utils/signature.js";
+import { getSecret } from "../utils/secretDecryptor.js";
+import { handleApiResponse } from "../utils/rateLimitHandler.js";
+import { API_CONFIG } from "../../../config/frontend/api.js";
+import { requiresSignature } from "../../../config/shared/security.js";
 
 /**
- * Custom hook to fetch blockchain data for a BUILD project
- * Uses server-side decoded API endpoints (no ethers.js needed on frontend)
+ * Get API request headers with optional signature and API key
+ * @param {string} method - HTTP method (GET, POST, etc.)
+ * @param {string} path - Request path
+ * @param {Object|null} body - Request body (for POST/PUT/PATCH requests)
+ * @returns {Promise<Object>} headers
+ */
+export async function getApiHeaders(method, path, body = null) {
+  let headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Only generate signature for protected endpoints
+  if (requiresSignature(path)) {
+    try {
+      const authHeaders = await generateAuthHeaders(method, path, body);
+      headers = { ...headers, ...authHeaders };
+    } catch (err) {
+      console.warn('Failed to generate signature for protected endpoint:', err.message);
+    }
+  }
+  
+  // Add API key if configured (decrypted from encrypted store)
+  const apiKey = getSecret('API_KEY');
+  if (apiKey) {
+    headers = { ...headers, 'x-api-key': apiKey };
+  }
+  
+  return headers;
+}
+
+/**
+ * Fetcher function with authentication headers
+ * @param {string} url - Full URL to fetch
+ * @param {string} method - HTTP method
+ * @param {Function} onRateLimit - Callback for rate limit errors
+ * @returns {Promise<Object>} Parsed response data
+ */
+async function fetchWithAuth(url, method, onRateLimit) {
+  const startTime = performance.now();
+  const requestId = Math.random().toString(36).substring(7);
+  
+  console.log(`[Fetch ${requestId}] 🔵 START`, { url, method });
+  
+  try {
+    const headers = await getApiHeaders(method, url);
+    const headerTime = performance.now();
+    console.log(`[Fetch ${requestId}] 📝 Headers generated`, { 
+      duration: `${(headerTime - startTime).toFixed(2)}ms` 
+    });
+    
+    const res = await fetch(url, { headers });
+    const fetchTime = performance.now();
+    console.log(`[Fetch ${requestId}] 🌐 Fetch complete`, { 
+      status: res.status,
+      ok: res.ok,
+      duration: `${(fetchTime - headerTime).toFixed(2)}ms`,
+      totalDuration: `${(fetchTime - startTime).toFixed(2)}ms`
+    });
+    
+    const response = await handleApiResponse(res, onRateLimit);
+    const endTime = performance.now();
+    console.log(`[Fetch ${requestId}] ✅ SUCCESS`, { 
+      totalDuration: `${(endTime - startTime).toFixed(2)}ms` 
+    });
+    
+    return response;
+  } catch (error) {
+    const endTime = performance.now();
+    console.error(`[Fetch ${requestId}] ❌ FAILED`, {
+      error: error.message,
+      totalDuration: `${(endTime - startTime).toFixed(2)}ms`,
+      url,
+      method
+    });
+    throw error;
+  }
+}
+
+/**
+ * Hook to fetch project config
  * @param {Object} project - The selected project object
+ * @param {Object} options - Optional configuration
+ * @returns {Object} - { config, loading, error, refetch }
+ */
+export function useProjectConfig(project, options = {}) {
+  const { onRateLimit } = options;
+  
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+  const configPath = project 
+    ? `${API_CONFIG.getEndpointPath('projectConfig')}?tokenAddress=${project.tokenAddress}&seasonId=${project.seasonId || API_CONFIG.defaultSeasonId}`
+    : null;
+  
+  const { data, error, isLoading, mutate } = useSWR(
+    project ? ['projectConfig', project.tokenAddress, project.seasonId || API_CONFIG.defaultSeasonId] : null,
+    async () => {
+      const response = await fetchWithAuth(`${apiUrl}${configPath}`, 'GET', onRateLimit);
+
+      // Validate response structure
+      if (!response?.blockchainData) {
+        throw new Error('Invalid config response: missing blockchainData field');
+      }
+
+      // Extract and flatten data from v1 structure
+      const getProjectConfig = response.blockchainData.get_project_season_config || {};
+      const getTokenAmounts = response.blockchainData.get_token_amounts || {};
+      
+      return {
+        ...getProjectConfig,
+        ...getTokenAmounts
+      };
+    },
+    {
+      dedupingInterval: 2000,
+      onError: (err) => {
+        console.error('[useProjectConfig] ❌ onError', { error: err.message });
+        if (err.rateLimited) {
+          onRateLimit?.(err.retryAfter);
+        }
+      },
+      onSuccess: (data) => {
+        console.log('[useProjectConfig] ✅ onSuccess', { hasData: !!data });
+      },
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        console.warn('[useProjectConfig] 🔄 onErrorRetry', { 
+          retryCount, 
+          error: error.message,
+          willRetry: retryCount < 3
+        });
+      }
+    }
+  );
+  
+  return {
+    config: data,
+    loading: isLoading,
+    error,
+    refetch: mutate
+  };
+}
+
+/**
+ * Hook to fetch global state
+ * @param {Object} project - The selected project object
+ * @param {Object} options - Optional configuration
+ * @returns {Object} - { globalState, loading, error, refetch }
+ */
+export function useGlobalState(project, options = {}) {
+  const { onRateLimit } = options;
+  
+  const apiUrl = import.meta.env.VITE_API_URL || '';
+  const globalStatePath = project
+    ? `${API_CONFIG.getEndpointPath('projectGlobalState')}?tokenAddress=${project.tokenAddress}&seasonId=${project.seasonId || API_CONFIG.defaultSeasonId}`
+    : null;
+  
+  const { data, error, isLoading, mutate } = useSWR(
+    project ? ['projectGlobalState', project.tokenAddress, project.seasonId || API_CONFIG.defaultSeasonId] : null,
+    async () => {
+      const response = await fetchWithAuth(`${apiUrl}${globalStatePath}`, 'GET', onRateLimit);
+      
+      // Validate response structure
+      if (!response?.blockchainData) {
+        throw new Error('Invalid global state response: missing blockchainData field');
+      }
+      
+      // Extract data from v1 structure
+      return response.blockchainData.get_global_state || {};
+    },
+    {
+      dedupingInterval: 2000,
+      onError: (err) => {
+        console.error('[useGlobalState] ❌ onError', { error: err.message });
+        if (err.rateLimited) {
+          onRateLimit?.(err.retryAfter);
+        }
+      },
+      onSuccess: (data) => {
+        console.log('[useGlobalState] ✅ onSuccess', { hasData: !!data });
+      },
+      onErrorRetry: (error, key, config, revalidate, { retryCount }) => {
+        console.warn('[useGlobalState] 🔄 onErrorRetry', { 
+          retryCount, 
+          error: error.message,
+          willRetry: retryCount < 3
+        });
+      }
+    }
+  );
+  
+  return {
+    globalState: data,
+    loading: isLoading,
+    error,
+    refetch: mutate
+  };
+}
+
+/**
+ * Combined hook to fetch both config and global state (backward compatible)
+ * @param {Object} project - The selected project object
+ * @param {Object} options - Optional configuration
  * @returns {Object} - { config, globalState, loading, error, refetch }
  */
-export function useBlockchainData(project) {
-  const [config, setConfig] = useState(null);
-  const [globalState, setGlobalState] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const fetchData = useCallback(async () => {
-    if (!project) {
-      setConfig(null);
-      setGlobalState(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Fetch config and global state in parallel from server API
-      const [configRes, globalStateRes] = await Promise.all([
-        fetch(`/api/project/${project.tokenAddress}/config?seasonId=${project.seasonId}`),
-        fetch(`/api/project/${project.tokenAddress}/global-state?seasonId=${project.seasonId}`)
-      ]);
-
-      if (!configRes.ok) {
-        const errorData = await configRes.json();
-        throw new Error(errorData.message || 'Failed to fetch config');
-      }
-
-      if (!globalStateRes.ok) {
-        const errorData = await globalStateRes.json();
-        throw new Error(errorData.message || 'Failed to fetch global state');
-      }
-
-      // Parse the decoded JSON responses from server
-      const configData = await configRes.json();
-      const globalStateData = await globalStateRes.json();
-
-      setConfig(configData);
-      setGlobalState(globalStateData);
-    } catch (err) {
-      console.error("Error fetching blockchain data:", err);
-      setError(err.message || "Failed to fetch blockchain data");
-    } finally {
-      setLoading(false);
-    }
-  }, [project]);
-
-  // Fetch data when project changes
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+export function useBlockchainData(project, options = {}) {
+  const { config, loading: configLoading, error: configError, refetch: refetchConfig } = useProjectConfig(project, options);
+  const { globalState, loading: stateLoading, error: stateError, refetch: refetchState } = useGlobalState(project, options);
 
   return {
     config,
     globalState,
-    loading,
-    error,
-    refetch: fetchData,
+    loading: configLoading || stateLoading,
+    error: configError || stateError,
+    refetch: () => {
+      refetchConfig();
+      refetchState();
+    }
   };
 }
 
 /**
  * Calculate vesting metrics for a given day
  * Based on BUILDClaim.sol logic
+ * NOTE: This is kept for currentMetrics calculation in App.jsx
+ * Timeline generation is now handled by Web Worker (vesting.worker.js)
  */
 export function calculateVestingMetrics({
   maxTokenAmount,
@@ -146,51 +305,3 @@ export function calculateVestingMetrics({
     isUnlockComplete,
   };
 }
-
-/**
- * Generate full vesting timeline table data
- */
-export function generateVestingTimeline({
-  maxTokenAmount,
-  config,
-  globalState,
-  startDate,
-}) {
-  if (!config || !maxTokenAmount || maxTokenAmount <= 0) {
-    return [];
-  }
-
-  const rows = [];
-  const days = config.unlockDurationDays || 90;
-
-  for (let t = 0; t <= days; t++) {
-    const metrics = calculateVestingMetrics({
-      maxTokenAmount,
-      baseTokenClaimBps: config.baseTokenClaimBps,
-      unlockDurationDays: days,
-      earlyVestRatioMinBps: config.earlyVestRatioMinBps,
-      earlyVestRatioMaxBps: config.earlyVestRatioMaxBps,
-      dayT: t,
-      totalLoyalty: globalState?.totalLoyalty || 0,
-      totalLoyaltyIneligible: globalState?.totalLoyaltyIneligible || 0,
-      tokenAmount: config.tokenAmount,
-    });
-
-    // Calculate date
-    let date = "";
-    if (startDate) {
-      const d = new Date(startDate);
-      d.setDate(d.getDate() + t);
-      date = d.toISOString().split("T")[0];
-    }
-
-    rows.push({
-      t,
-      date,
-      ...metrics,
-    });
-  }
-
-  return rows;
-}
-

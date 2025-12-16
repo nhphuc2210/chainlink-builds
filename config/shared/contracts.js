@@ -8,7 +8,9 @@ export const BUILD_FACTORY_ABI = [
 ];
 
 export const BUILD_CLAIM_ABI = [
-  "function getGlobalState(uint256[] seasonIds) view returns (tuple(uint256 totalLoyalty, uint256 totalLoyaltyIneligible, uint256 totalClaimed)[])"
+  "function getGlobalState(uint256[] seasonIds) view returns (tuple(uint256 totalLoyalty, uint256 totalLoyaltyIneligible, uint256 totalClaimed)[])",
+  "function getCurrentClaimValues(address user, tuple(uint256 seasonId, uint256 maxTokenAmount)[] seasonIdsAndMaxTokenAmounts) view returns (tuple(uint256 base, uint256 bonus, uint256 vested, uint256 claimable, uint256 earlyVestableBonus, uint256 loyaltyBonus, uint256 claimed)[])",
+  "function getUserState(tuple(address user, uint256 seasonId)[] usersAndSeasonIds) view returns (tuple(uint256 claimed, bool hasEarlyClaimed)[])"
 ];
 
 // 9 BUILD Projects with their details
@@ -98,11 +100,13 @@ export const BUILD_PROJECTS = [
 
 // Project registry map (for backend - keyed by lowercase token address)
 export const PROJECTS_MAP = BUILD_PROJECTS.reduce((acc, project) => {
-  acc[project.tokenAddress.toLowerCase()] = {
-    name: project.ticker,
-    decimals: project.decimals,
-    claimAddress: project.claimAddress
+  return {
+    ...acc,
+    [project.tokenAddress.toLowerCase()]: {
+      name: project.ticker,
+      decimals: project.decimals,
+      claimAddress: project.claimAddress
+    }
   };
-  return acc;
 }, {});
 

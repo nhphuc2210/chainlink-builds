@@ -5,7 +5,6 @@ backend/node_modules/
 
 # Build output
 dist/
-.env
 
 # Environment variables
 .env.local
@@ -30,3 +29,16 @@ Thumbs.db
 # Lock files - keep pnpm-lock.yaml for reproducible builds
 package-lock.json
 
+# Obfuscation artifacts
+scripts/.secrets-cache
+scripts/.secrets-env
+dist/**/*.map
+.vite/
+
+# Process lock file (Windows restart fix)
+.server.lock
+
+# Markdown files (except README)
+*.md
+!readme.md
+.env

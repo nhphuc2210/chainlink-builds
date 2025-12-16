@@ -36,6 +36,14 @@ export function formatNumberDecimal(num, decimals = 2) {
  */
 export function formatPercent(num) {
   if (num === null || num === undefined || isNaN(num)) return "0%";
-  return num.toFixed(2) + "%";
+  return num.toFixed(0) + "%";
+}
+
+/**
+ * Format percentage with decimals
+ */
+export function formatPercentDecimal(num, decimals = 2) {
+  if (num === null || num === undefined || isNaN(num)) return "0%";
+  return num.toFixed(decimals) + "%";
 }
 

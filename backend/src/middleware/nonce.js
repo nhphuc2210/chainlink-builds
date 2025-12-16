@@ -1,0 +1,216 @@
+import crypto from 'crypto';
+import { SECURITY_CONFIG } from '../../../config/backend/security.js';
+import { getRedisClient, isRedisAvailable, incrementFallbackUsage } from '../utils/redis.js'; // Shared Redis client
+
+/**
+ * Server-Issued Nonce Middleware (Two-Set Security Model)
+ * 
+ * Provides anti-replay protection with server-issued nonce verification.
+ * 
+ * Security Model:
+ * - "generated:" prefix - Whitelist of server-issued nonces (proves authenticity)
+ * - "used:" prefix - Blacklist of consumed nonces (prevents replay)
+ * 
+ * Flow:
+ * 1. Client calls GET /api/init to get a server-issued nonce
+ * 2. Server generates nonce and stores in "generated:" set
+ * 3. Client includes nonce in x-nonce header for API call
+ * 4. Server verifies:
+ *    a) Nonce EXISTS in "generated:" (proves it came from server)
+ *    b) Nonce NOT EXISTS in "used:" (hasn't been used yet)
+ * 5. Server moves nonce from "generated:" to "used:" (mark as consumed)
+ * 
+ * Security Benefits:
+ * - Prevents attackers from creating arbitrary nonces (must come from server)
+ * - Each nonce can only be used once (anti-replay)
+ * - Nonces expire after TTL (can't hoard them)
+ * - Rate limits /api/init to prevent nonce farming
+ */
+
+const GENERATED_PREFIX = SECURITY_CONFIG.nonce.generatedPrefix;
+const USED_PREFIX = SECURITY_CONFIG.nonce.usedPrefix;
+const GENERATION_WINDOW_SECONDS = SECURITY_CONFIG.nonce.generationWindowSeconds;
+const USED_TTL_SECONDS = SECURITY_CONFIG.nonce.usedTtlSeconds;
+
+// Use shared Redis client
+const redis = getRedisClient();
+
+// In-memory fallback store (exported for signature.js to use in fallback mode)
+export const memoryNoncesGenerated = new Map();  // Whitelist
+export const memoryNoncesUsed = new Map();       // Blacklist
+
+// Cleanup expired nonces from memory fallback periodically
+setInterval(() => {
+  if (!isRedisAvailable()) {
+    const now = Date.now();
+    let cleanedGenerated = 0;
+    let cleanedUsed = 0;
+    
+    // Clean generated nonces (30s window)
+    for (const [nonce, timestamp] of memoryNoncesGenerated) {
+      if (now - timestamp > GENERATION_WINDOW_SECONDS * 1000) {
+        memoryNoncesGenerated.delete(nonce);
+        cleanedGenerated++;
+      }
+    }
+    
+    // Clean used nonces (7 days window)
+    for (const [nonce, timestamp] of memoryNoncesUsed) {
+      if (now - timestamp > USED_TTL_SECONDS * 1000) {
+        memoryNoncesUsed.delete(nonce);
+        cleanedUsed++;
+      }
+    }
+    
+    if (cleanedGenerated > 0 || cleanedUsed > 0) {
+      console.log(`[Nonce] Cleaned ${cleanedGenerated} generated (>30s), ${cleanedUsed} used (>7days) nonces from memory. Remaining: ${memoryNoncesGenerated.size} generated, ${memoryNoncesUsed.size} used`);
+    }
+  }
+}, SECURITY_CONFIG.nonce.cleanupIntervalMs);
+
+/**
+ * Generate a new one-time nonce
+ * @returns {Promise<{nonce: string, expiresIn: number}>}
+ */
+export async function generateNonce() {
+  const nonce = crypto.randomUUID();
+  const generatedKey = `${GENERATED_PREFIX}${nonce}`;
+  
+  // Store in "generated:" whitelist to prove this nonce came from server
+  // This prevents attackers from creating arbitrary nonces
+  // TTL: 30 seconds - nonce must be used within this window or it expires
+  if (isRedisAvailable() && redis) {
+    try {
+      await redis.setex(generatedKey, GENERATION_WINDOW_SECONDS, '1');
+    } catch (err) {
+      console.warn('[Nonce] Redis setex failed, using memory fallback:', err.message);
+      incrementFallbackUsage();
+      memoryNoncesGenerated.set(nonce, Date.now());
+    }
+  } else {
+    incrementFallbackUsage();
+    memoryNoncesGenerated.set(nonce, Date.now());
+  }
+  
+  return { nonce, expiresIn: GENERATION_WINDOW_SECONDS };
+}
+
+/**
+ * Verify and consume a nonce (one-time use, two-set approach)
+ * NOTE: This middleware is DEPRECATED in favor of signature.js verification
+ * which includes two-set nonce validation as part of HMAC signature check
+ * @param {boolean} required - If true, reject requests without nonce
+ */
+export function verifyNonce(required = true) {
+  return async (req, res, next) => {
+    const nonce = req.headers['x-nonce'];
+    
+    // Check if nonce header present
+    if (!nonce) {
+      if (required) {
+        return res.status(401).json({
+          error: 'Nonce required',
+          message: 'Get a nonce from GET /api/init first'
+        });
+      }
+      return next();
+    }
+    
+    // Validate nonce format (should be UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(nonce)) {
+      return res.status(401).json({
+        error: 'Invalid nonce format',
+        message: 'Nonce must be a valid UUID'
+      });
+    }
+    
+    const generatedKey = `${GENERATED_PREFIX}${nonce}`;
+    const usedKey = `${USED_PREFIX}${nonce}`;
+    let valid = false;
+    
+    // Two-set verification
+    if (isRedisAvailable() && redis) {
+      try {
+        // Check if nonce was generated by server AND not used yet
+        const [existsInGenerated, existsInUsed] = await Promise.all([
+          redis.exists(generatedKey),
+          redis.exists(usedKey)
+        ]);
+        
+        if (existsInGenerated === 1 && existsInUsed === 0) {
+          // Move from "generated" to "used"
+          // "used" has longer TTL (7 days) to prevent replay attack for extended period
+          await Promise.all([
+            redis.del(generatedKey),
+            redis.setex(usedKey, USED_TTL_SECONDS, '1')
+          ]);
+          valid = true;
+        }
+      } catch (err) {
+        console.warn('[Nonce] Redis operations failed, checking memory fallback:', err.message);
+        // Fall through to memory check
+        if (memoryNoncesGenerated.has(nonce) && !memoryNoncesUsed.has(nonce)) {
+          const timestamp = memoryNoncesGenerated.get(nonce);
+          // Check if nonce is within 30s generation window
+          if (Date.now() - timestamp <= GENERATION_WINDOW_SECONDS * 1000) {
+            memoryNoncesGenerated.delete(nonce);
+            memoryNoncesUsed.set(nonce, Date.now());
+            valid = true;
+          }
+        }
+      }
+    } else {
+      // Memory fallback
+      if (memoryNoncesGenerated.has(nonce) && !memoryNoncesUsed.has(nonce)) {
+        const timestamp = memoryNoncesGenerated.get(nonce);
+        // Check if nonce is within 30s generation window
+        if (Date.now() - timestamp <= GENERATION_WINDOW_SECONDS * 1000) {
+          memoryNoncesGenerated.delete(nonce);
+          memoryNoncesUsed.set(nonce, Date.now());
+          valid = true;
+        }
+      }
+    }
+    
+    if (!valid) {
+      return res.status(401).json({
+        error: 'Invalid or expired nonce',
+        message: 'Nonce not found, already used, or not issued by server. Get a new nonce from GET /api/init'
+      });
+    }
+    
+    // Nonce valid and consumed
+    next();
+  };
+}
+
+/**
+ * Get nonce store stats (for monitoring)
+ * @returns {Promise<{storage: string, generated: number, used: number, redisConnected: boolean}>}
+ */
+export async function getNonceStats() {
+  if (isRedisAvailable() && redis) {
+    try {
+      const [generatedKeys, usedKeys] = await Promise.all([
+        redis.keys(`${GENERATED_PREFIX}*`),
+        redis.keys(`${USED_PREFIX}*`)
+      ]);
+      return {
+        storage: 'redis',
+        generated: generatedKeys.length,
+        used: usedKeys.length,
+        redisConnected: true
+      };
+    } catch (err) {
+      // Fall through to memory stats
+    }
+  }
+  
+  return {
+    storage: 'memory',
+    generated: memoryNoncesGenerated.size,
+    used: memoryNoncesUsed.size,
+    redisConnected: isRedisAvailable()
+  };
+}

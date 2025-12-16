@@ -1,4 +1,3 @@
-import React from 'react';
 import { theme } from '../../styles/theme.js';
 import { spinnerContainerStyle, spinnerStyle } from '../../styles/components.js';
 

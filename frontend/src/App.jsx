@@ -1,46 +1,61 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { BUILD_PROJECTS } from "../../shared/constants/contracts.js";
-import { useBlockchainData, generateVestingTimeline, calculateVestingMetrics } from "./hooks/useBlockchainData.js";
-import { theme } from "./styles/theme.js";
-import { containerStyle, footerStyle } from "./styles/components.js";
+import { useMemo, useState, useEffect } from "react";
+import { BUILD_PROJECTS } from "../../config/shared/contracts.js";
+import { useBlockchainData, calculateVestingMetrics } from "./hooks/useBlockchainData.js";
+import { useWalletClaimData } from "./hooks/useWalletClaimData.js";
+import { useVestingWorker } from "./hooks/useVestingWorker.js";
+import { useRateLimit } from "./contexts/RateLimitContext.jsx";
+import { containerStyle } from "./styles/components.js";
 import "./styles/animations.css";
+import { calculateCurrentDay } from "./utils/dateUtils.js"; // Import the new helper
+import { DEFAULTS } from "../../config/frontend/defaults.js";
 
 // Components
 import {
   BlockchainOverlay,
   Header,
+  DisclaimerBanner,
+  RateLimitBanner,
   ProjectSelector,
+  WalletInput,
+  WalletMetricExplanations,
   ConfigInfo,
   GlobalStateInfo,
   SimulationInputs,
-  ProgressBar,
   ComparisonCards,
   VestingTable,
+  VestingChart,
   FormulaSection,
-  FAQ
+  FAQ,
+  Footer
 } from "./components/index.js";
 
-// Default simulation values
-const DEFAULTS = {
-  baseTokenClaimBps: 2000, // 20%
-  unlockDurationDays: 90,
-  earlyVestRatioMinBps: 5000, // 50%
-  earlyVestRatioMaxBps: 5000, // 50%
-  tokenAmount: 1000000, // 1M tokens
-  loyaltyPool: 10000000, // 10M tokens in loyalty pool for simulation
-};
-
 export default function App() {
+  // Rate limit context
+  const { rateLimitActive, rateLimitRetryAfter, triggerRateLimit, clearRateLimit } = useRateLimit();
+
   // Project selection
   const [selectedProjectIndex, setSelectedProjectIndex] = useState(0);
   const selectedProject = BUILD_PROJECTS[selectedProjectIndex];
 
   // Fetch blockchain data for selected project
-  const { config, globalState, loading, error, refetch } = useBlockchainData(selectedProject);
+  const { config, globalState, loading, error, refetch } = useBlockchainData(selectedProject, {
+    onRateLimit: triggerRateLimit
+  });
+
+  // Wallet data state
+  const [walletAddress, setWalletAddress] = useState('');
+  
+  // Fetch wallet claim data with SWR hook (auto-fetches when walletAddress is valid)
+  const { claimData: walletClaimData, loading: walletLoading, error: walletError, refetch: refetchWallet } = useWalletClaimData(
+    walletAddress, 
+    selectedProject, 
+    { onRateLimit: triggerRateLimit }
+  );
 
   // User inputs for simulation (editable freely)
   const [maxTokenAmount, setMaxTokenAmount] = useState(10000);
   const [currentDay, setCurrentDay] = useState(0);
+  // Removed throttle for instant slider response - data is pre-computed in rows array (O(1) lookup)
   const [simulateDurationDays, setSimulateDurationDays] = useState(DEFAULTS.unlockDurationDays);
   const [simulateStartDate, setSimulateStartDate] = useState("2025-12-16");
   const [simulateBaseClaimBps, setSimulateBaseClaimBps] = useState(DEFAULTS.baseTokenClaimBps);
@@ -95,7 +110,7 @@ export default function App() {
         const diffTime = today.getTime() - unlockStart.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         // Set currentDay to calculated value, but not less than 0 and not more than duration
-        setCurrentDay(Math.max(0, Math.min(diffDays, config.unlockDurationDays)));
+        setCurrentDay(calculateCurrentDay(config.unlockStartDate, config.unlockDurationDays));
       }
     } else if (config) {
       // Config not set, only sync start date if available
@@ -107,7 +122,7 @@ export default function App() {
         const diffTime = today.getTime() - unlockStart.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         // Set currentDay to calculated value, but not less than 0
-        setCurrentDay(Math.max(0, diffDays));
+        setCurrentDay(calculateCurrentDay(config.unlockStartDate));
       }
     }
   }, [config, isChainConfigSet]);
@@ -161,17 +176,15 @@ export default function App() {
     };
   }, [isChainConfigSet, globalState, simulateLoyaltyPool]);
 
-  // Generate vesting timeline
-  const rows = useMemo(() => {
-    return generateVestingTimeline({
+  // Generate vesting timeline using Web Worker (non-blocking, runs on background thread)
+  const { rows, calculating } = useVestingWorker({
       maxTokenAmount: Number(maxTokenAmount) || 0,
       config: simulatedConfig,
       globalState: simulatedGlobalState,
       startDate,
     });
-  }, [maxTokenAmount, simulatedConfig, simulatedGlobalState, startDate]);
 
-  // Current day metrics
+  // Current day metrics - using direct currentDay for instant response
   const currentMetrics = useMemo(() => {
     if (!maxTokenAmount) return null;
     return calculateVestingMetrics({
@@ -180,7 +193,7 @@ export default function App() {
       unlockDurationDays: durationDays,
       earlyVestRatioMinBps: simulatedConfig.earlyVestRatioMinBps,
       earlyVestRatioMaxBps: simulatedConfig.earlyVestRatioMaxBps,
-      dayT: currentDay,
+      dayT: currentDay, // Direct currentDay for instant slider response
       totalLoyalty: simulatedGlobalState.totalLoyalty,
       totalLoyaltyIneligible: simulatedGlobalState.totalLoyaltyIneligible,
       tokenAmount: simulatedConfig.tokenAmount,
@@ -202,18 +215,35 @@ export default function App() {
     const unlockStart = new Date(simulateStartDate);
     const diffTime = today.getTime() - unlockStart.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    setCurrentDay(Math.max(0, Math.min(diffDays, durationDays)));
+    setCurrentDay(calculateCurrentDay(simulateStartDate, durationDays));
     setSimulateLoyaltyPool(DEFAULTS.loyaltyPool);
   };
 
+  // Handle wallet address change (SWR automatically refetches when walletAddress changes)
+  const handleWalletAddressChange = (newAddress) => {
+    setWalletAddress(newAddress);
+  };
+
+
   return (
     <>
+      {/* Rate Limit Banner */}
+      {rateLimitActive && (
+        <RateLimitBanner 
+          retryAfter={rateLimitRetryAfter}
+          onExpire={clearRateLimit}
+        />
+      )}
+
       {/* Blockchain Network Overlay */}
       <BlockchainOverlay />
       
       <div style={containerStyle}>
         {/* Header */}
         <Header />
+
+        {/* Disclaimer Banner - Important notice at the top */}
+        <DisclaimerBanner />
 
         {/* Project Selector */}
         <ProjectSelector
@@ -226,11 +256,21 @@ export default function App() {
           config={config}
         />
 
+        {/* Wallet Input with integrated claim data - Shows on-chain data only */}
+        <WalletInput
+          walletAddress={walletAddress}
+          setWalletAddress={handleWalletAddressChange}
+          loading={walletLoading}
+          error={walletError}
+          claimData={walletClaimData}
+          rateLimitActive={rateLimitActive}
+          onRefresh={refetchWallet}
+        />
+
         {/* Config Info from Blockchain */}
         <ConfigInfo
           simulatedConfig={simulatedConfig}
           selectedProject={selectedProject}
-          globalState={globalState}
           dataSource={dataSource}
         />
 
@@ -239,39 +279,25 @@ export default function App() {
           simulatedGlobalState={simulatedGlobalState}
           selectedProject={selectedProject}
           dataSource={dataSource}
+          simulatedConfig={simulatedConfig}
         />
 
         {/* Simulation Inputs */}
         <SimulationInputs
-          isChainConfigSet={isChainConfigSet}
-          config={config}
-          globalState={globalState}
           maxTokenAmount={maxTokenAmount}
           setMaxTokenAmount={setMaxTokenAmount}
           currentDay={currentDay}
           setCurrentDay={setCurrentDay}
           durationDays={durationDays}
-          simulateLoyaltyPool={simulateLoyaltyPool}
-          setSimulateLoyaltyPool={setSimulateLoyaltyPool}
-          simulateStartDate={simulateStartDate}
-          simulateDurationDays={simulateDurationDays}
-          simulateBaseClaimBps={simulateBaseClaimBps}
-          simulateEarlyVestMinBps={simulateEarlyVestMinBps}
-          simulateEarlyVestMaxBps={simulateEarlyVestMaxBps}
-          DEFAULTS={DEFAULTS}
-          onReset={handleReset}
-        />
-
-        {/* Progress Bar */}
-        <ProgressBar
-          currentDay={currentDay}
           progressPercent={progressPercent}
+          onReset={handleReset}
         />
 
         {/* Comparison Summary Cards */}
         <ComparisonCards
           currentDay={currentDay}
-          currentMetrics={currentMetrics}
+          rows={rows}
+          startDate={startDate}
         />
 
         {/* Table */}
@@ -282,16 +308,29 @@ export default function App() {
           loading={loading}
         />
 
+        {/* Vesting Progress Chart */}
+        <VestingChart
+          rows={rows}
+          currentDay={currentDay}
+          setCurrentDay={setCurrentDay}
+          durationDays={durationDays}
+          maxTokenAmount={maxTokenAmount}
+          simulatedConfig={simulatedConfig}
+          simulatedGlobalState={simulatedGlobalState}
+          startDate={startDate}
+        />
+
+        {/* Wallet Metric Explanations */}
+        <WalletMetricExplanations />
+
         {/* Formula Notes - Vietnamese */}
         <FormulaSection />
 
         {/* FAQ Section - Vietnamese */}
         <FAQ />
 
-        {/* Footer */}
-        <div style={footerStyle} className="footer animate-fade-in-up animate-delay-5">
-          By member of VN Chainlink Community • Data from Ethereum Mainnet
-        </div>
+        {/* Footer with Disclaimer */}
+        <Footer />
       </div>
     </>
   );

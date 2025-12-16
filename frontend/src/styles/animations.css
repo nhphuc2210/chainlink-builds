@@ -25,18 +25,22 @@
 .animate-delay-4 { animation-delay: 0.4s; opacity: 0; }
 .animate-delay-5 { animation-delay: 0.5s; opacity: 0; }
 
-/* ========== PULSE ANIMATION ========== */
-@keyframes pulse {
+/* ========== PULSE ANIMATION (COMBO MAX - OPTION 3) ========== */
+@keyframes pulseRipple {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(55, 91, 210, 0.5);
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(55, 91, 210, 0.7),
+                0 0 1px rgba(55, 91, 210, 0.3);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(55, 91, 210, 0);
+    transform: scale(1.2);
+    box-shadow: 0 0 0 4px rgba(55, 91, 210, 0),
+                0 0 7px rgba(55, 91, 210, 0.5);
   }
 }
 
 .pulse-dot {
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulseRipple 1.4s ease-in-out infinite;
 }
 
 /* ========== SPINNER ANIMATION ========== */
@@ -92,7 +96,7 @@
   background: none;
   border: none;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #64748b;
 }
 
@@ -169,6 +173,96 @@
 
 .input-group:hover .input-label {
   color: #375BD2;
+}
+
+/* ========== RANGE SLIDER (Touch-Friendly) ========== */
+input[type="range"].touch-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 52px; /* Increased from 24px to 48px for larger touch target (similar to chart's 40px diameter) */
+  background: transparent;
+  cursor: pointer;
+  touch-action: none; /* Prevent all touch gestures including pull-to-refresh */
+  padding: 24px 0; /* Increased from 8px to 20px - creates ~40px vertical touch zone */
+  margin: 8px 0;
+}
+
+/* Track styles - optimized gradient for performance */
+input[type="range"].touch-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  background-image: linear-gradient(to right, #375BD2, #375BD2);
+  background-size: var(--progress, 0%) 100%;
+  background-repeat: no-repeat;
+  border-radius: 2px;
+  /* Removed transition for instant response */
+}
+
+input[type="range"].touch-slider::-moz-range-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 2px;
+}
+
+input[type="range"].touch-slider::-moz-range-progress {
+  background: #375BD2;
+  height: 8px;
+  border-radius: 2px;
+}
+
+/* Thumb styles - larger for touch, positioned for expanded hit area */
+input[type="range"].touch-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  background: #375BD2;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(55, 91, 210, 0.4);
+  margin-top: -10px; /* Keeps thumb centered on track */
+  cursor: grab;
+  /* Removed transition for instant drag response - only use on active/focus */
+}
+
+input[type="range"].touch-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  background: #375BD2;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(55, 91, 210, 0.4);
+  cursor: grab;
+  /* Removed transition for instant drag response - only use on active/focus */
+}
+
+/* Active/Focus states - instant feedback with transitions only on interaction */
+input[type="range"].touch-slider:active::-webkit-slider-thumb,
+input[type="range"].touch-slider:focus::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 4px 16px rgba(55, 91, 210, 0.5);
+  cursor: grabbing;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+input[type="range"].touch-slider:active::-moz-range-thumb,
+input[type="range"].touch-slider:focus::-moz-range-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 4px 16px rgba(55, 91, 210, 0.5);
+  cursor: grabbing;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+input[type="range"].touch-slider:focus {
+  outline: none;
+}
+
+input[type="range"].touch-slider:focus::-webkit-slider-runnable-track {
+  height: 10px;
+  transition: height 0.1s ease;
 }
 
 /* ========== PROJECT SELECTOR ========== */
@@ -251,5 +345,20 @@
 
 .refresh-btn:not(:disabled):hover {
   animation: buttonGlow 2s ease-in-out infinite;
+}
+
+/* ========== PREVENT PULL-TO-REFRESH ON MOBILE ========== */
+body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  overscroll-behavior-y: contain;
+}
+
+/* Prevent overscroll on all scrollable containers */
+* {
+  overscroll-behavior: contain;
 }
 

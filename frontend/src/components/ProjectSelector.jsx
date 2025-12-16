@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   projectSelectorStyle,
   selectWrapperStyle,
@@ -60,7 +59,7 @@ export function ProjectSelector({
 }) {
   return (
     <div style={projectSelectorStyle} className="animate-fade-in-up animate-delay-2">
-      <label style={labelStyle}>SELECT PROJECT</label>
+      <label style={labelStyle}>STEP 1: SELECT BUILD PROJECT</label>
       <div style={selectWrapperStyle}>
         {/* Custom Select Container */}
         <div style={selectContainerStyle} className="custom-select">

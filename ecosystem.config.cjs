@@ -26,6 +26,28 @@ module.exports = {
       time: true,
       merge_logs: true,
     },
+    
+    // Cloudflare Tunnel
+    {
+      name: 'cloudflare-tunnel',
+      namespace: 'chainlink-build',
+      script: '/usr/local/bin/cloudflared',
+      args: 'tunnel --no-autoupdate run chainlink-build',
+      cwd: '/home/jupyter',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      env: {
+        HOME: '/home/jupyter'
+      },
+      error_file: './logs/cloudflare-tunnel-error.log',
+      out_file: './logs/cloudflare-tunnel-out.log',
+      log_file: './logs/cloudflare-tunnel-combined.log',
+      time: true,
+      merge_logs: true,
+    }
   ]
 };
 

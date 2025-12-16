@@ -55,50 +55,98 @@ reward_preview/
 
 ## Development
 
-Run both frontend and backend concurrently:
+### 1. Local Development Mode (Hot Reload)
+
+Chạy cả frontend và backend với hot reload để phát triển:
+
 ```bash
-pnpm dev
+pnpm local:dev
 ```
 
-Or run separately:
+**Chi tiết:**
+- Frontend: `http://localhost:5173` (Vite dev server với HMR)
+- Backend: `http://localhost:7000` (nodemon auto-restart)
+- Sử dụng `NODE_ENV=development`
+- Chạy đồng thời cả 2 processes với concurrently
+
+**Chạy riêng lẻ (nếu cần):**
 ```bash
-# Frontend only (http://localhost:5173)
+# Chỉ frontend
 pnpm dev:frontend
 
-# Backend only (http://localhost:7000)
+# Chỉ backend
 pnpm dev:backend
 ```
 
-## Production Build
+### 2. Local Production Mode (Test Production Build)
 
-1. **Build the frontend:**
-   ```bash
-   pnpm build
-   ```
-   This creates the production build in the `dist/` folder.
+Test production build trên máy local trước khi deploy:
 
-2. **Start the production server:**
-   ```bash
-   pnpm start
-   ```
+```bash
+pnpm local:prod
+```
 
-3. **Or use PM2:**
-   ```bash
-   # Start server + tunnel
-   pm2 start ecosystem.config.cjs
-   
-   # View logs
-   pm2 logs reward-preview  
-   
-   # Check status (by namespace)
-   pm2 status --namespace chainlink-build
-   
-   # Restart all in namespace
-   pm2 restart --namespace chainlink-build
-   
-   # Stop all in namespace
-   pm2 stop --namespace chainlink-build
-   
-   # Delete from PM2
-   pm2 delete --namespace chainlink-build
-   ```
+**Chi tiết:**
+- Build frontend với production config (minified, obfuscated)
+- Chạy backend ở production mode
+- Sử dụng `NODE_ENV=local-production`
+- Backend serve static files từ `dist/`
+- Truy cập: `http://localhost:7000`
+
+### 3. Production Deployment (PM2)
+
+Deploy lên production server với PM2:
+
+**Build trước:**
+```bash
+pnpm build
+```
+*(Script này tự động encrypt secrets và build frontend)*
+
+**Chạy với PM2:**
+```bash
+# Khởi động server
+pnpm pm2:start
+
+# Restart server
+pnpm pm2:restart
+
+# Stop server
+pnpm pm2:stop
+
+# Xem logs
+pnpm pm2:logs
+```
+
+**Hoặc quản lý trực tiếp với PM2:**
+```bash
+# Start với ecosystem config
+pm2 start ecosystem.config.cjs
+
+# Xem status theo namespace
+pm2 status --namespace chainlink-build
+
+# Restart tất cả trong namespace
+pm2 restart --namespace chainlink-build
+
+# Stop tất cả trong namespace
+pm2 stop --namespace chainlink-build
+
+# Xóa khỏi PM2
+pm2 delete --namespace chainlink-build
+```
+
+**Chi tiết Production:**
+- Sử dụng `NODE_ENV=production`
+- Frontend đã được build, minified và obfuscated
+- Secrets được encrypt (nếu có)
+- Compression và rate limiting enabled
+- PM2 quản lý process, auto-restart nếu crash
+
+
+```major version release
+git tag -a v1.0.0 -m "Release v1.0.0"
+git archive --prefix=chainlink-builds-v1.0.0/ -o chainlink-builds-v1.0.0.zip v1.0.0
+git push origin v1.0.0
+git tag
+```
